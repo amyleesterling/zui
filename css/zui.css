@@ -1,0 +1,368 @@
+/* ---- zui: a z-dimension mapped hologram surface --------------------------
+   Every element in the scene declares a depth in depth units (1du = 60px)
+   via data-z, and lives at a real translateZ inside one perspective rig.
+   Depth is then communicated four ways at once, all from the same number:
+   perspective scale, parallax under rig tilt, depth-of-field blur against a
+   moving focal plane, and dimming with distance. The tokens and the panel
+   surface follow scifi-ui (amyleesterling.github.io/scifi-ui), so this
+   composes with pages already built on that language. */
+
+:root {
+  --ink: 239 244 251;
+  --dim: #9AA2B1;
+  --faint: #666E7C;
+  --ground: #07080B;
+  --panel: 15 18 24;
+  --line: #1D222B;
+  --beam: 178 216 248;
+  --glow: 74 150 224;
+  --accent: #3E96F0;
+  --ease: cubic-bezier(.16, 1, .3, 1);
+}
+
+* { box-sizing: border-box; }
+* { scrollbar-color: #2A313D transparent; scrollbar-width: thin; }
+
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--ground); color: rgb(var(--ink) / .92);
+  font: 400 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+}
+
+/* ---- the stage and the rig ----------------------------------------------
+   The stage owns the camera (perspective). The rig is the one element that
+   tilts with the pointer; because it is preserve-3d, every layer under it
+   parallaxes by exactly its own depth with no per-layer math. */
+.zui-stage {
+  position: fixed; inset: 0;
+  perspective: 1100px;
+  perspective-origin: 50% 46%;
+  /* clip, not hidden: focusing a control in a 3D-offset panel would
+     otherwise let the browser scroll this box to "reveal" it, shearing
+     the whole scene sideways. clip cannot be scrolled, even by focus. */
+  overflow: clip;
+}
+
+.zui-rig {
+  position: absolute; inset: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+  /* the rig is a full-viewport plane at z=0; left hittable it would occlude
+     every layer behind that plane, so only the layers themselves take hits */
+  pointer-events: none;
+}
+
+/* A layer is anything with data-z. Its resting transform comes from --zpx
+   (set once by the engine from data-z); DoF blur and dim are per-frame
+   variables driven by the focus spring. Blur wants its own compositing, so
+   filter and opacity ride variables rather than being animated properties. */
+.zui-layer {
+  position: absolute;
+  pointer-events: auto;
+  /* left/top address the element's centre, so a layer can be placed on the
+     stage with two numbers and depth never changes where it sits */
+  transform: translate(-50%, -50%) translateZ(var(--zpx, 0px));
+  filter: blur(var(--dof-blur, 0px));
+  opacity: var(--dof-dim, 1);
+  transition: transform .55s var(--ease);
+}
+
+.zui-layer[data-focusable] { cursor: pointer; }
+.zui-layer[data-focusable]:hover {
+  transform: translate(-50%, -50%) translateZ(calc(var(--zpx, 0px) + 14px));
+}
+.zui-layer.is-focused[data-focusable]:hover {
+  transform: translate(-50%, -50%) translateZ(var(--zpx, 0px));
+}
+
+/* the far backdrop: a faint isometric grid receding hard, so the tilt has
+   something silent to move against even between panels */
+.zui-backwall {
+  left: 50%; top: 50%; width: 145%; height: 145%;
+  background:
+    radial-gradient(ellipse 60% 48% at 50% 44%, rgb(var(--glow) / .055), transparent 70%),
+    repeating-linear-gradient(0deg, transparent 0 55px, rgb(var(--ink) / .028) 55px 56px),
+    repeating-linear-gradient(90deg, transparent 0 55px, rgb(var(--ink) / .028) 55px 56px);
+  pointer-events: none;
+}
+
+/* ---- panel surface (holopanel, per scifi-ui panel-surface.css) ---------- */
+.holopanel {
+  isolation: isolate;
+  border: 1px solid rgb(var(--glow) / .30);
+  border-radius: 12px;
+  background: linear-gradient(158deg,
+    rgb(var(--panel) / .94) 0%, rgb(6 10 18 / .97) 100%);
+  box-shadow:
+    0 18px 50px rgb(0 0 0 / .5),
+    0 0 60px rgb(var(--glow) / .06),
+    inset 0 1px 0 rgb(196 228 255 / .10);
+}
+
+.holopanel::before {
+  content: ""; position: absolute; left: 8%; right: 8%; top: -1px; height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgb(196 228 255 / .95) 50%, transparent);
+  box-shadow: 0 0 12px rgb(var(--beam) / .6);
+}
+
+/* the entrance, staggered by depth from the engine via --boot-delay: the
+   deepest layers materialise first so the scene builds back-to-front */
+.holopanel.is-in {
+  animation: holopanel-in 720ms var(--ease) both;
+  animation-delay: var(--boot-delay, 0ms);
+}
+@keyframes holopanel-in {
+  0%   { opacity: 0;
+         transform: translate(-50%, -50%) translateZ(var(--zpx, 0px))
+                    translateY(10px) scale(.97);
+         filter: blur(10px) brightness(2.5); }
+  60%  { opacity: 1; transform: translate(-50%, -50%) translateZ(var(--zpx, 0px));
+         filter: blur(0) brightness(1.15); }
+  100% { opacity: var(--dof-dim, 1);
+         transform: translate(-50%, -50%) translateZ(var(--zpx, 0px));
+         filter: blur(var(--dof-blur, 0px)); }
+}
+
+/* ---- panel anatomy ------------------------------------------------------ */
+.panel-head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 11px 14px 9px; border-bottom: 1px solid var(--line);
+}
+.panel-title {
+  font: 500 10px/1 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  letter-spacing: .3em; text-transform: uppercase; color: rgb(var(--ink) / .8);
+  white-space: nowrap;
+}
+.panel-body { padding: 12px 14px 14px; }
+
+/* every layer wears its own coordinate, so the mapping is legible */
+.ztag {
+  margin-left: auto; font: 500 9px/1 ui-monospace, Menlo, Consolas, monospace;
+  font-style: normal; letter-spacing: .2em; font-variant-numeric: tabular-nums;
+  color: rgb(var(--beam) / .55); white-space: nowrap;
+}
+.is-focused .ztag { color: rgb(var(--beam) / 1); text-shadow: 0 0 8px rgb(var(--beam) / .8); }
+
+.is-focused.holopanel { border-color: rgb(var(--glow) / .65); }
+
+/* ---- readout rows ------------------------------------------------------- */
+.readout { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; }
+.readout .k {
+  font: 500 9px/1.9 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .18em; text-transform: uppercase; color: var(--faint);
+}
+.readout .v {
+  font: 500 12px/1.45 ui-monospace, Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums; color: rgb(var(--beam) / .92);
+  text-align: right;
+}
+
+/* ---- focal plane slider (holobar rail, per scifi-ui holobar.css) -------- */
+.fplane { display: flex; align-items: center; gap: 12px; }
+.fplane .end {
+  font: 500 9px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .2em; color: var(--faint); text-transform: uppercase;
+}
+.fplane input[type="range"] {
+  appearance: none; -webkit-appearance: none; flex: 1 1 auto; height: 16px;
+  margin: 0; background: transparent; cursor: grab; touch-action: none;
+}
+.fplane input[type="range"]:active { cursor: grabbing; }
+.fplane input[type="range"]::-webkit-slider-runnable-track {
+  height: 2px; border-radius: 999px; background: rgb(var(--ink) / .11);
+}
+.fplane input[type="range"]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none; width: 9px; height: 9px;
+  margin-top: -3.5px; border-radius: 50%; border: 0;
+  background: rgb(var(--beam));
+  box-shadow: 0 0 9px rgb(var(--beam) / .95);
+}
+.fplane input[type="range"]::-moz-range-track {
+  height: 2px; border-radius: 999px; background: rgb(var(--ink) / .11);
+}
+.fplane input[type="range"]::-moz-range-thumb {
+  width: 9px; height: 9px; border-radius: 50%; border: 0;
+  background: rgb(var(--beam)); box-shadow: 0 0 9px rgb(var(--beam) / .95);
+}
+
+.fjump { display: flex; gap: 6px; margin-top: 11px; }
+.fjump button {
+  appearance: none; background: transparent; color: var(--dim);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
+  font: 500 10px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .14em; cursor: pointer;
+  transition: color .15s, border-color .15s, box-shadow .15s;
+}
+.fjump button:hover, .fjump button:focus-visible {
+  color: rgb(var(--ink) / .95); border-color: rgb(var(--glow) / .5);
+}
+.fjump button[aria-pressed="true"] {
+  color: rgb(var(--beam)); border-color: rgb(var(--glow) / .7);
+  box-shadow: 0 0 10px rgb(var(--glow) / .25), inset 0 0 8px rgb(var(--glow) / .12);
+}
+
+/* ---- signal walks list -------------------------------------------------- */
+.walks { display: flex; flex-direction: column; gap: 2px; margin: -4px 0; }
+.walks button {
+  appearance: none; display: flex; align-items: center; gap: 10px;
+  background: transparent; border: 0; border-radius: 6px; padding: 7px 8px;
+  font: 500 11px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .1em; color: var(--dim); text-align: left; cursor: pointer;
+  transition: color .15s, background .15s;
+}
+.walks button:hover { color: rgb(var(--ink) / .95); background: rgb(var(--ink) / .05); }
+.walks button i {
+  flex: 0 0 auto; width: 5px; height: 5px; border-radius: 50%;
+  background: rgb(var(--ink) / .22); transition: background .2s, box-shadow .2s;
+}
+.walks button[aria-pressed="true"] { color: rgb(var(--beam)); }
+.walks button[aria-pressed="true"] i {
+  background: rgb(var(--beam));
+  box-shadow: 0 0 7px rgb(var(--beam) / .95);
+}
+.walks .wz {
+  margin-left: auto; font-size: 9px; letter-spacing: .18em;
+  color: var(--faint); font-variant-numeric: tabular-nums;
+}
+
+/* ---- the depth rail: the z map ------------------------------------------
+   A vertical minimap of the depth axis itself. Every registered layer gets
+   a tick at its depth; the glowing marker is the focal plane. It sits on
+   the glass (outside the rig) because a map of the space should not live
+   inside the space it maps. */
+.zrail {
+  position: fixed; left: clamp(10px, 2.4vw, 30px); top: 50%;
+  transform: translateY(-50%); height: min(52vh, 420px); width: 40px;
+  z-index: 5;
+}
+.zrail .axis {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 1px;
+  background: linear-gradient(180deg, transparent,
+    rgb(var(--ink) / .22) 12%, rgb(var(--ink) / .22) 88%, transparent);
+}
+.zrail .cap {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  font: 500 8px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .28em; text-indent: .28em; color: var(--faint);
+  text-transform: uppercase; white-space: nowrap;
+}
+.zrail .cap.near { top: -18px; }
+.zrail .cap.far { bottom: -18px; }
+.zrail .tick {
+  position: absolute; left: 50%; width: 18px; height: 18px; margin: 0;
+  padding: 0; border: 0; background: none; cursor: pointer;
+  transform: translate(-50%, -50%);
+  display: flex; align-items: center; justify-content: center;
+}
+.zrail .tick i {
+  display: block; width: 7px; height: 1px;
+  background: rgb(var(--ink) / .38);
+  transition: width .2s, background .2s, box-shadow .2s;
+}
+.zrail .tick:hover i, .zrail .tick:focus-visible i {
+  width: 13px; background: rgb(var(--beam) / .9);
+}
+.zrail .tick.is-focused i {
+  width: 13px; background: rgb(var(--beam));
+  box-shadow: 0 0 7px rgb(var(--beam) / .9);
+}
+.zrail .tick:focus-visible { outline: 1px solid rgb(var(--beam) / .8); border-radius: 3px; }
+.zrail .marker {
+  position: absolute; left: 50%; width: 15px; height: 15px;
+  transform: translate(-50%, -50%); pointer-events: none;
+  border: 1px solid rgb(var(--beam) / .9); border-radius: 50%;
+  box-shadow: 0 0 10px rgb(var(--beam) / .55), inset 0 0 5px rgb(var(--beam) / .4);
+}
+.zrail .marker::after {
+  content: ""; position: absolute; inset: 5px; border-radius: 50%;
+  background: rgb(var(--beam));
+}
+
+/* ---- boot chip (per the somatotopy stage) ------------------------------- */
+.bootload {
+  position: fixed; top: 46%; left: 50%; transform: translate(-50%, -50%);
+  z-index: 9; display: flex; flex-direction: column; align-items: center;
+  gap: 7px; pointer-events: none;
+  font: 500 10px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .34em; text-transform: uppercase; color: #9fd0ff;
+  text-indent: .34em;
+  animation: bl-pulse 1.15s ease-in-out infinite;
+  transition: opacity .3s ease;
+}
+body:not(.booting) .bootload { opacity: 0; visibility: hidden; }
+.bootload i {
+  display: block; width: 74px; height: 2px; overflow: hidden;
+  background: rgb(122 186 246 / .14); border-radius: 2px; position: relative;
+}
+.bootload i::after {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 26px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, rgb(158 208 255 / .95), transparent);
+  animation: bl-scan 1.05s cubic-bezier(.45, .05, .55, .95) infinite;
+}
+@keyframes bl-scan { from { left: -26px; } to { left: 74px; } }
+@keyframes bl-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
+body.booting .zui-rig, body.booting .zrail { opacity: 0; }
+.zui-rig, .zrail { transition: opacity .55s ease; }
+
+/* ---- fixed chrome ------------------------------------------------------- */
+.mast {
+  padding: 13px 16px 0 0; text-align: left;
+}
+.mast h1 {
+  margin: 0; font: 500 13px/1.3 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .34em; text-transform: uppercase; color: rgb(var(--ink) / .9);
+  text-shadow: 0 0 18px rgb(var(--glow) / .5);
+}
+.mast p {
+  margin: 6px 0 0; font-size: 11.5px; letter-spacing: .04em; color: var(--dim);
+  max-width: 44ch;
+}
+.mast p b { color: rgb(var(--beam) / .9); font-weight: 500; }
+
+.statusline {
+  font: 500 9px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--faint);
+  display: flex; gap: 22px; padding: 9px 14px; white-space: nowrap;
+}
+.statusline b { color: rgb(var(--beam) / .75); font-weight: 500; }
+
+/* specimen canvas fills its layer */
+.specimen { border-radius: 12px; overflow: hidden; }
+.specimen canvas { display: block; width: 100%; height: 100%; }
+.specimen .cap {
+  position: absolute; left: 14px; bottom: 11px;
+  font: 500 9px/1.7 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .22em; text-transform: uppercase; color: var(--faint);
+  pointer-events: none;
+}
+.specimen .cap b { color: rgb(var(--beam) / .8); font-weight: 500; }
+
+/* ---- placement ----------------------------------------------------------
+   left/top address each layer's centre. Depth comes only from data-z; these
+   two numbers are pure composition. */
+.lay-mast     { left: 25%;   top: 13%;   width: min(360px, 40vw); }
+.lay-specimen { left: 43%;   top: 53%;   width: min(620px, 47vw);
+                height: min(500px, 58vh); }
+.lay-readout  { left: 79%;   top: 21%;   width: min(252px, 24vw); }
+.lay-fplane   { left: 80%;   top: 45%;   width: min(280px, 25vw); }
+.lay-walks    { left: 77%;   top: 71%;   width: min(276px, 25vw); }
+.lay-archive  { left: 12.5%; top: 63%;   width: min(220px, 19vw); }
+.lay-status   { left: 43%;   top: 91%; }
+
+@media (max-width: 880px) {
+  .lay-mast     { left: 50%; top: 10%; width: min(360px, 88vw); }
+  .lay-specimen { left: 50%; top: 36%; width: 92vw; height: 30vh; }
+  .lay-readout  { left: 28%; top: 63%; width: 46vw; }
+  .lay-fplane   { left: 75%; top: 63%; width: 42vw; }
+  .lay-walks    { left: 50%; top: 89%; width: 88vw; }
+  .lay-archive, .lay-status { display: none; }
+  .zrail { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .holopanel.is-in, .bootload, .bootload i::after { animation: none; }
+  .zui-layer { transition: none; }
+}
