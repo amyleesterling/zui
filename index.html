@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zui — z-dimension mapped hologram UI</title>
+<meta name="description" content="A HUD where every element has a real depth coordinate: one z axis shared by the DOM panels and the point-cloud specimen, with a focal plane you can rack through the scene.">
+<link rel="stylesheet" href="css/zui.css">
+</head>
+<body class="booting">
+
+<div class="bootload" aria-hidden="true">Mapping depth field<i></i></div>
+
+<!-- the z map lives on the glass, outside the space it maps -->
+<nav class="zrail" aria-label="depth rail">
+  <span class="cap near">Near</span>
+  <div class="axis"></div>
+  <span class="cap far">Far</span>
+</nav>
+
+<div class="zui-stage">
+  <div class="zui-rig">
+
+    <div class="zui-layer zui-backwall lay-backwall" data-z="-4.4" aria-hidden="true"></div>
+
+    <header class="zui-layer lay-mast mast" data-z="2.2" data-name="masthead" data-focusable>
+      <h1>ZUI // Depth Field</h1>
+      <p>Every panel holds a coordinate on one shared <b>z axis</b> — the
+        specimen's points included. Click a panel, a rail tick, or drag the
+        focal plane to rack focus through the scene. <b>[</b> and <b>]</b>
+        nudge it from the keyboard.</p>
+    </header>
+
+    <section class="zui-layer holopanel lay-specimen specimen" data-z="0"
+             data-name="specimen" data-focusable>
+      <canvas id="specimen-canvas"></canvas>
+      <div class="cap"><b>Specimen</b> · cortex point field · z ±2.1 du</div>
+      <i class="ztag" style="position:absolute;top:11px;right:14px;">Z +0.0</i>
+    </section>
+
+    <section class="zui-layer holopanel lay-readout" data-z="1.0"
+             data-name="readout" data-focusable>
+      <div class="panel-head">
+        <span class="panel-title">Readout</span><i class="ztag">Z +1.0</i>
+      </div>
+      <div class="panel-body readout">
+        <span class="k">Focal plane</span> <span class="v" id="ro-focus">+0.00 du</span>
+        <span class="k">Plane offset</span> <span class="v" id="ro-plane">0 px</span>
+        <span class="k">Rig tilt</span>    <span class="v" id="ro-tilt">0.0° / 0.0°</span>
+        <span class="k">Point field</span> <span class="v" id="ro-points">—</span>
+        <span class="k">Signals</span>     <span class="v" id="ro-signals">—</span>
+      </div>
+    </section>
+
+    <section class="zui-layer holopanel lay-fplane" data-z="1.2"
+             data-name="focal plane" data-focusable>
+      <div class="panel-head">
+        <span class="panel-title">Focal plane</span><i class="ztag">Z +1.2</i>
+      </div>
+      <div class="panel-body">
+        <div class="fplane">
+          <span class="end">Far</span>
+          <input id="fplane-range" type="range" min="-260" max="200" step="1" value="0"
+                 aria-label="focal plane depth in pixels">
+          <span class="end">Near</span>
+        </div>
+        <div class="fjump">
+          <button type="button" data-f="1.6">Near</button>
+          <button type="button" data-f="0" aria-pressed="true">Mid</button>
+          <button type="button" data-f="-2.4">Far</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="zui-layer holopanel lay-walks" data-z="-1.4"
+             data-name="signal walks" data-focusable>
+      <div class="panel-head">
+        <span class="panel-title">Signal walks</span><i class="ztag">Z −1.4</i>
+      </div>
+      <div class="panel-body walks">
+        <button type="button"><i></i>Arcuate relay <span class="wz">R-01</span></button>
+        <button type="button"><i></i>Callosal crossing <span class="wz">R-02</span></button>
+        <button type="button"><i></i>Cingulum walk <span class="wz">R-03</span></button>
+        <button type="button"><i></i>Uncinate hook <span class="wz">R-04</span></button>
+        <button type="button"><i></i>Fronto-occipital run <span class="wz">R-05</span></button>
+      </div>
+    </section>
+
+    <section class="zui-layer holopanel lay-archive" data-z="-3.2"
+             data-name="archive" data-focusable>
+      <div class="panel-head">
+        <span class="panel-title">Archive</span><i class="ztag">Z −3.2</i>
+      </div>
+      <div class="panel-body readout">
+        <span class="k">Session</span> <span class="v">Δ-2047</span>
+        <span class="k">Frames</span>  <span class="v">holding</span>
+        <span class="k">Depth log</span> <span class="v">7 planes</span>
+      </div>
+    </section>
+
+    <footer class="zui-layer holopanel lay-status statusline" data-z="-2.2"
+            data-name="status" data-focusable>
+      <span>Rig <b>live</b></span>
+      <span>Axis <b>1du = 60px</b></span>
+      <span>Camera <b>1100px persp</b></span>
+      <span>DoF <b>coupled</b></span>
+    </footer>
+
+  </div>
+</div>
+
+<script src="js/zui.js"></script>
+<script src="js/specimen.js"></script>
+</body>
+</html>
