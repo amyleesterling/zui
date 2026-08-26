@@ -34,10 +34,23 @@ real `translateZ` inside one perspective rig; the point-cloud specimen
 projects with the same perspective constant, so panel depths and point
 depths are one coordinate. A spring-damped pointer tilt gives parallax; a
 global focal plane (its own spring) drives per-layer depth-of-field
-blur/dim and per-point bokeh from the same distance. Click a panel and
-focus dives to its depth; the slider racks focus through the whole scene;
-`[` / `]` nudge it. A fixed depth rail maps every layer as a tick and the
-focal plane as a glowing marker.
+blur/dim and per-point bokeh from the same distance. The DoF is
+asymmetric, like eyes focused near: focus rests on the nearest working
+plane (the specimen), blur and dimming grow at full strength with distance
+*behind* the focal plane and only gently in front, so the deepest layers
+are always the blurriest. Click a panel and focus dives to its depth; the
+slider racks focus through the whole scene; `[` / `]` nudge it. A fixed
+depth rail maps every layer as a tick and the focal plane as a glowing
+marker.
+
+The specimen is the real brain: the HCP S1200 group-average midthickness
+surface (Van Essen et al., NeuroImage 80:62, 2013; 32k fs_LR), baked from
+the Draco meshes published on
+[amyleesterling.github.io/human-brain](https://amyleesterling.github.io/human-brain/)
+into `js/brainpoints.js` (every 24th vertex, ~2.7k points, HCP Open Access
+Data Use Terms), with Glasser HCP-MMP1 labels tinting M1 (area 4, gold)
+and S1 (3a/3b/1/2, green) — the same regions the somatotopy HUD paints.
+Signal cables anchor on the sensorimotor strip.
 
 **Reconciling the two systems**: perspective would break the flow's
 no-overlap guarantee (near panels render bigger, off-center deep panels
@@ -60,7 +73,8 @@ becomes a scrolling column.
 | --- | --- |
 | `css/zui.css` | tokens, stage/rig, docks, unit transform stack, holopanel surface, depth rail |
 | `js/zui.js` | the engine: tilt + focus springs, DoF, area ledger, FLIP territory springs, particles, perspective compensation, `window.ZUI` |
-| `js/specimen.js` | dependency-free point-cloud brain with signal cables, drawn in the engine's depth units |
+| `js/brainpoints.js` | the baked HCP S1200 surface: ~2.7k quantised points + M1/S1 labels |
+| `js/specimen.js` | dependency-free renderer for the surface points and signal cables, drawn in the engine's depth units |
 | `test/sweep.js` | the zero-overlap rect-intersection sweep |
 
 Traps worth knowing if you build on this:

@@ -252,9 +252,12 @@
   compensate();
 
   /* ---- pointer -> rig tilt ---------------------------------------------- */
+  // focus rests on the nearest working plane (the specimen), so at rest the
+  // closest thing is sharpest and blur grows with distance behind it
+  const FOCUS_HOME = 1.4 * UNIT;
   const state = {
     t: 0,
-    focus: 0, focusTarget: 0,
+    focus: FOCUS_HOME, focusTarget: FOCUS_HOME,
     tilt: { x: 0, y: 0 }, tiltTarget: { x: 0, y: 0 },
   };
   const frameHooks = [];
@@ -357,9 +360,14 @@
       `rotateX(${(-state.tilt.y).toFixed(3)}deg) rotateY(${state.tilt.x.toFixed(3)}deg)`;
 
     for (const l of layers) {
-      const d = Math.abs(l.z - state.focus) / UNIT;
-      const blur = Math.min(8, Math.max(0, d - 0.55) * 1.9);
-      const dim = Math.max(0.52, 1 - Math.max(0, d - 0.35) * 0.11);
+      // asymmetric depth of field, like eyes focused near: distance BEHIND
+      // the focal plane blurs and dims at full strength, distance in front
+      // of it only gently — the deepest layers are always the blurriest
+      const d = (state.focus - l.z) / UNIT;   // positive = behind the plane
+      const db = Math.max(0, d), df = Math.max(0, -d);
+      const blur = Math.min(8, Math.max(0, db - 0.55) * 1.9 + Math.max(0, df - 0.55) * 0.8);
+      const dim = Math.max(0.5,
+        1 - Math.max(0, db - 0.35) * 0.11 - Math.max(0, df - 0.35) * 0.05);
       if (Math.abs(blur - l.blur) > 0.05) {
         l.el.style.setProperty("--dof-blur", blur.toFixed(2) + "px"); l.blur = blur;
       }

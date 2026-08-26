@@ -39,7 +39,7 @@
     <div class="zui-layer zui-backwall" data-z="-4.4" aria-hidden="true"></div>
 
     <div class="dock dock-top">
-      <header class="zui-layer zui-unit mast" data-z="2.2" data-unit="mast"
+      <header class="zui-layer zui-unit mast" data-z="-1.2" data-unit="mast"
               data-name="masthead" data-focusable>
         <h1>ZUI // Depth Field</h1>
         <p>Every unit owns territory in a flex dock — nothing can overlap by
@@ -50,11 +50,11 @@
           focus; <b>[</b> and <b>]</b> nudge it.</p>
       </header>
 
-      <section class="zui-layer zui-unit holopanel unit-readout" data-z="1.0"
+      <section class="zui-layer zui-unit holopanel unit-readout" data-z="0.6"
                data-unit="readout" data-name="readout" data-focusable>
         <div class="panel-head">
           <span class="panel-title">Readout</span>
-          <i class="ztag">Z +1.0 · <b data-share>—</b></i>
+          <i class="ztag">Z +0.6 · <b data-share>—</b></i>
         </div>
         <div class="panel-body readout">
           <span class="k">Focal plane</span> <span class="v" id="ro-focus">+0.00 du</span>
@@ -66,42 +66,42 @@
         </div>
       </section>
 
-      <section class="zui-layer zui-unit holopanel unit-fplane" data-z="1.2"
+      <section class="zui-layer zui-unit holopanel unit-fplane" data-z="1.0"
                data-unit="fplane" data-name="focal plane" data-focusable>
         <div class="panel-head">
           <span class="panel-title">Focal plane</span>
-          <i class="ztag">Z +1.2 · <b data-share>—</b></i>
+          <i class="ztag">Z +1.0 · <b data-share>—</b></i>
         </div>
         <div class="panel-body">
           <div class="fplane">
             <span class="end">Far</span>
-            <input id="fplane-range" type="range" min="-260" max="200" step="1" value="0"
+            <input id="fplane-range" type="range" min="-260" max="200" step="1" value="84"
                    aria-label="focal plane depth in pixels">
             <span class="end">Near</span>
           </div>
           <div class="fjump">
-            <button type="button" data-f="1.6">Near</button>
-            <button type="button" data-f="0" aria-pressed="true">Mid</button>
-            <button type="button" data-f="-2.4">Far</button>
+            <button type="button" data-f="1.4" aria-pressed="true">Near</button>
+            <button type="button" data-f="-0.6">Mid</button>
+            <button type="button" data-f="-2.8">Far</button>
           </div>
         </div>
       </section>
     </div>
 
     <div class="dock dock-main">
-      <section class="zui-layer zui-unit holopanel unit-specimen specimen" data-z="0"
+      <section class="zui-layer zui-unit holopanel unit-specimen specimen" data-z="1.4"
                data-unit="specimen" data-name="specimen" data-focusable>
         <canvas id="specimen-canvas"></canvas>
-        <div class="cap"><b>Specimen</b> · cortex point field · z ±2.1 du</div>
-        <i class="ztag spec-ztag">Z +0.0 · <b data-share>—</b></i>
+        <div class="cap"><b>Specimen</b> · HCP S1200 surface · M1 · S1</div>
+        <i class="ztag spec-ztag">Z +1.4 · <b data-share>—</b></i>
       </section>
 
       <div class="dock dock-side">
-        <section class="zui-layer zui-unit holopanel" data-z="-1.4"
+        <section class="zui-layer zui-unit holopanel" data-z="-0.6"
                  data-unit="walks" data-name="signal walks" data-focusable>
           <div class="panel-head">
             <span class="panel-title">Signal walks</span>
-            <i class="ztag">Z −1.4 · <b data-share>—</b></i>
+            <i class="ztag">Z −0.6 · <b data-share>—</b></i>
           </div>
           <div class="panel-body walks">
             <button type="button"><i></i>Arcuate relay <span class="wz">R-01</span></button>
@@ -112,11 +112,11 @@
           </div>
         </section>
 
-        <section class="zui-layer zui-unit holopanel" data-z="-3.2"
+        <section class="zui-layer zui-unit holopanel" data-z="-2.8"
                  data-unit="archive" data-name="archive" data-focusable>
           <div class="panel-head">
             <span class="panel-title">Archive</span>
-            <i class="ztag">Z −3.2 · <b data-share>—</b></i>
+            <i class="ztag">Z −2.8 · <b data-share>—</b></i>
           </div>
           <div class="panel-body readout">
             <span class="k">Session</span> <span class="v">Δ-2047</span>
@@ -128,7 +128,7 @@
     </div>
 
     <div class="dock dock-bot">
-      <footer class="zui-layer zui-unit holopanel statusline" data-z="-2.2"
+      <footer class="zui-layer zui-unit holopanel statusline" data-z="-1.8"
               data-unit="status" data-name="status" data-focusable>
         <span>Rig <b>live</b></span>
         <span>Axis <b>1du = 60px</b></span>
@@ -142,6 +142,7 @@
 </div>
 
 <script src="js/zui.js"></script>
+<script src="js/brainpoints.js"></script>
 <script src="js/specimen.js"></script>
 </body>
 </html>
