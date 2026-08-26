@@ -1,54 +1,75 @@
 # zui — z-dimension mapped hologram UI
 
-A HUD where every element holds a real coordinate on one shared depth axis —
-the DOM panels and the points inside the canvas specimen alike. Open
-`index.html` (any static server, or the file directly) and rack the focal
-plane through the scene.
+A HUD that is a dynamic organization, mathematically — in x, y **and** z.
+Open `index.html` (any static server, or the file directly), rack the focal
+plane through the scene, and toggle units off the roster to watch the
+others negotiate for their territory.
 
 Built on the [scifi-ui](https://amyleesterling.github.io/scifi-ui/) design
 language (tokens, holopanel surface, holobar rail), in the spirit of the
-[somatotopy HUD](https://amyleesterling.github.io/human-brain/somatotopy.html?areas=every&area=4&hemi=L&conn=1&surf=0).
-No dependencies: plain CSS 3D + Canvas 2D.
+[somatotopy HUD](https://amyleesterling.github.io/human-brain/somatotopy.html?areas=every&area=4&hemi=L&conn=1&surf=0)
+and its self-organizing dock system. No dependencies: plain CSS 3D + Canvas 2D.
 
-## The idea
+## Territory (x, y)
 
-Depth in most "3D-ish" UIs is faked per element — a drop shadow here, a
-parallax trick there — so nothing agrees on where anything is. Here depth is
-a single mapped coordinate:
+Every unit lives in a flex dock (a top row, a main row with a side column,
+a bottom row), so a unit that appears claims space in the flow and a unit
+that hides gives it back; **nothing can overlap by construction**.
+Underneath is an **area ledger**: each unit's screen share `a = wh/WH` is
+tracked continuously — every panel wears its live share next to its depth
+tag, and the readout totals coverage.
 
-- **One axis.** Every layer declares `data-z` in depth units (`1du = 60px`).
-  The engine gives it a real `translateZ` inside one perspective rig, and the
-  canvas specimen projects its points with the same perspective constant, so
-  a panel at `+1du` and a point at `+1du` are at the same depth.
-- **Felt, not painted.** A pointer-driven, spring-damped rig tilt parallaxes
-  every layer by exactly its own depth — no per-layer math, `preserve-3d`
-  does it.
-- **A focal plane.** One global focus value (its own spring). Each frame,
-  every layer gets depth-of-field blur and dimming from its distance to the
-  plane; the specimen's points bloom into bokeh by the same distance. Click
-  a panel and focus dives to *its* depth; drag the slider to rack focus
-  through the whole scene; `[` / `]` nudge it.
-- **The map is legible.** A fixed depth rail (the "z map") shows every layer
-  as a tick and the focal plane as a glowing marker; each panel wears its
-  coordinate as a `Z +1.0` tag.
+When the layout moves a unit, the transition is integrated as a
+**critically damped spring** (`s'' = −ω²s − 2ωs'`, ω = 14 rad/s — the
+unique damping that reaches rest fastest with zero overshoot; integrated in
+closed form so no time step can make it overshoot either). The **area
+differential each unit gains or loses is emitted as particles**, count
+scaling with √|dA|: claiming screen draws sparks inward, ceding it sheds
+them outward.
+
+## Depth (z)
+
+Every layer declares `data-z` in depth units (`1du = 60px`) and sits at a
+real `translateZ` inside one perspective rig; the point-cloud specimen
+projects with the same perspective constant, so panel depths and point
+depths are one coordinate. A spring-damped pointer tilt gives parallax; a
+global focal plane (its own spring) drives per-layer depth-of-field
+blur/dim and per-point bokeh from the same distance. Click a panel and
+focus dives to its depth; the slider racks focus through the whole scene;
+`[` / `]` nudge it. A fixed depth rail maps every layer as a tick and the
+focal plane as a glowing marker.
+
+**Reconciling the two systems**: perspective would break the flow's
+no-overlap guarantee (near panels render bigger, off-center deep panels
+slide toward the vanishing point), so each unit carries a counter-scale
+`(P − z)/P` and a counter-translate `t = −(c − o)·z/P`, recomputed from
+the ledger after every layout change. At rest, apparent boxes equal flow
+boxes exactly; depth reads through parallax, focus, and boot order.
+
+## Verified
+
+`node test/sweep.js` (needs `playwright-core` and a Chromium) runs a
+rect-intersection sweep across every unit-visibility state × widths
+1440/1024/700/430: **296 pair checks, zero overlaps everywhere**, including
+the states where whole docks collapse and the phone width where the scene
+becomes a scrolling column.
 
 ## Anatomy
 
 | file | role |
 | --- | --- |
-| `css/zui.css` | tokens, stage/rig, layer DoF plumbing, holopanel surface, depth rail, placement |
-| `js/zui.js` | the engine: tilt + focus springs, per-layer DoF, rail, boot sequence, `window.ZUI` |
+| `css/zui.css` | tokens, stage/rig, docks, unit transform stack, holopanel surface, depth rail |
+| `js/zui.js` | the engine: tilt + focus springs, DoF, area ledger, FLIP territory springs, particles, perspective compensation, `window.ZUI` |
 | `js/specimen.js` | dependency-free point-cloud brain with signal cables, drawn in the engine's depth units |
+| `test/sweep.js` | the zero-overlap rect-intersection sweep |
 
-Smoothness comes from three places: the two springs (nothing snaps, every
-input decays through the same easing), depth staggering on boot (far layers
-materialise first), and DoF written as CSS variables so blur/dim ride the
-compositor-friendly `filter`/`opacity` path.
-
-Two traps worth knowing if you build on this:
+Traps worth knowing if you build on this:
 
 - The rig is a full-viewport plane at `z = 0`; it must be
   `pointer-events: none` or it occludes hit-testing for every layer behind it.
 - The stage must be `overflow: clip`, not `hidden` — focusing a control
   inside a 3D-offset panel otherwise lets the browser scroll the stage to
   "reveal" it, shearing the whole scene sideways.
+- `getBoundingClientRect()` includes the 3D projection, which is what lets
+  the sweep test the *apparent* geometry — but it also means FLIP snapshots
+  must be taken after springs are cleared and compensation reapplied.

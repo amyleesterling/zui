@@ -1,11 +1,21 @@
 /* ---- zui: a z-dimension mapped hologram surface --------------------------
-   Every element in the scene declares a depth in depth units (1du = 60px)
-   via data-z, and lives at a real translateZ inside one perspective rig.
-   Depth is then communicated four ways at once, all from the same number:
-   perspective scale, parallax under rig tilt, depth-of-field blur against a
-   moving focal plane, and dimming with distance. The tokens and the panel
-   surface follow scifi-ui (amyleesterling.github.io/scifi-ui), so this
-   composes with pages already built on that language. */
+   Two coordinate systems, both real:
+
+   xy — every unit lives in a flex dock (a top row, a main row with a side
+   column, a bottom row), so a unit that appears claims space in the flow
+   and a unit that hides gives it back; nothing can overlap by
+   construction. The engine tracks each unit's screen share (an area
+   ledger), moves units between layouts on critically damped springs, and
+   sheds the area differential as particles.
+
+   z — every layer declares data-z in depth units (1du = 60px) and sits at
+   a real translateZ inside one perspective rig. Depth reads as parallax
+   under rig tilt, depth-of-field against a moving focal plane, and boot
+   order. Apparent size is counter-scaled by (P - z)/P so the flow's
+   no-overlap guarantee survives perspective.
+
+   Tokens and the panel surface follow scifi-ui
+   (amyleesterling.github.io/scifi-ui). */
 
 :root {
   --ink: 239 244 251;
@@ -20,6 +30,14 @@
   --ease: cubic-bezier(.16, 1, .3, 1);
 }
 
+/* registered so the hover lift can transition; browsers without @property
+   fall back to an instant lift, which is only less pretty, not broken */
+@property --lift {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
 * { box-sizing: border-box; }
 * { scrollbar-color: #2A313D transparent; scrollbar-width: thin; }
 
@@ -30,10 +48,7 @@ body {
   overflow: hidden;
 }
 
-/* ---- the stage and the rig ----------------------------------------------
-   The stage owns the camera (perspective). The rig is the one element that
-   tilts with the pointer; because it is preserve-3d, every layer under it
-   parallaxes by exactly its own depth with no per-layer math. */
+/* ---- the stage and the rig ---------------------------------------------- */
 .zui-stage {
   position: fixed; inset: 0;
   perspective: 1100px;
@@ -45,41 +60,73 @@ body {
 }
 
 .zui-rig {
-  position: absolute; inset: 0;
+  position: relative; min-height: 100%;
   transform-style: preserve-3d;
   will-change: transform;
   /* the rig is a full-viewport plane at z=0; left hittable it would occlude
-     every layer behind that plane, so only the layers themselves take hits */
+     every layer behind that plane, so only the units themselves take hits */
+  pointer-events: none;
+  /* the dock system */
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 58px 22px 16px clamp(74px, 6vw, 104px);
+}
+
+/* ---- docks --------------------------------------------------------------
+   Plain flex containers; preserve-3d so their children keep real depth.
+   The docks themselves are untouchable — units alone take pointer events. */
+.dock {
+  display: flex; gap: 16px; min-height: 0; min-width: 0;
+  transform-style: preserve-3d;
   pointer-events: none;
 }
+.dock-top  { flex: 0 0 auto; flex-wrap: wrap; align-items: stretch; }
+.dock-main { flex: 1 1 auto; align-items: stretch; }
+.dock-side {
+  flex: 0 0 auto; flex-direction: column; align-items: stretch;
+  width: clamp(240px, 21vw, 300px);
+}
+.dock-bot  { flex: 0 0 auto; justify-content: center; }
 
-/* A layer is anything with data-z. Its resting transform comes from --zpx
-   (set once by the engine from data-z); DoF blur and dim are per-frame
-   variables driven by the focus spring. Blur wants its own compositing, so
-   filter and opacity ride variables rather than being animated properties. */
+.mast         { flex: 1 1 300px; min-width: 240px; }
+.unit-readout { flex: 0 1 288px; }
+.unit-fplane  { flex: 0 1 300px; }
+.unit-specimen { flex: 1 1 auto; min-width: 0; min-height: 240px; }
+
+/* ---- layers and units ---------------------------------------------------
+   .zui-layer = has a depth coordinate (DoF blur/dim ride these variables).
+   .zui-unit = also owns dock territory; its transform stacks the FLIP
+   spring (--fx/--fy/--fsx/--fsy, engine-driven), the depth translate, the
+   hover lift, and the perspective counter-scale (--zsc, set once). */
 .zui-layer {
-  position: absolute;
-  pointer-events: auto;
-  /* left/top address the element's centre, so a layer can be placed on the
-     stage with two numbers and depth never changes where it sits */
-  transform: translate(-50%, -50%) translateZ(var(--zpx, 0px));
   filter: blur(var(--dof-blur, 0px));
   opacity: var(--dof-dim, 1);
-  transition: transform .55s var(--ease);
 }
 
-.zui-layer[data-focusable] { cursor: pointer; }
-.zui-layer[data-focusable]:hover {
-  transform: translate(-50%, -50%) translateZ(calc(var(--zpx, 0px) + 14px));
+.zui-unit {
+  position: relative;
+  pointer-events: auto;
+  /* --cx/--cy: perspective compensation, engine-set. Counter-scale keeps a
+     unit's apparent SIZE equal to its flow box; this counter-translate keeps
+     its apparent POSITION equal too — projection slides an off-center unit
+     toward the vanishing point by (c - origin)·z/P, so we pre-shift it the
+     other way. Together they make the dock's no-overlap guarantee hold on
+     screen, not just in layout; depth reads via parallax and focus. */
+  transform:
+    translate3d(calc(var(--fx, 0px) + var(--cx, 0px)),
+                calc(var(--fy, 0px) + var(--cy, 0px)),
+                calc(var(--zpx, 0px) + var(--lift, 0px)))
+    scale(calc(var(--fsx, 1) * var(--zsc, 1)), calc(var(--fsy, 1) * var(--zsc, 1)));
+  transition: --lift .5s var(--ease);
 }
-.zui-layer.is-focused[data-focusable]:hover {
-  transform: translate(-50%, -50%) translateZ(var(--zpx, 0px));
-}
+.zui-unit.is-hidden { display: none; }
+.zui-unit[data-focusable] { cursor: pointer; }
+.zui-unit[data-focusable]:hover { --lift: 14px; }
+.zui-unit.is-focused[data-focusable]:hover { --lift: 0px; }
 
-/* the far backdrop: a faint isometric grid receding hard, so the tilt has
-   something silent to move against even between panels */
+/* the far backdrop: not a unit, owns no territory */
 .zui-backwall {
-  left: 50%; top: 50%; width: 145%; height: 145%;
+  position: absolute; left: 50%; top: 50%; width: 145%; height: 145%;
+  transform: translate(-50%, -50%) translateZ(var(--zpx, 0px));
   background:
     radial-gradient(ellipse 60% 48% at 50% 44%, rgb(var(--glow) / .055), transparent 70%),
     repeating-linear-gradient(0deg, transparent 0 55px, rgb(var(--ink) / .028) 55px 56px),
@@ -108,22 +155,19 @@ body {
 }
 
 /* the entrance, staggered by depth from the engine via --boot-delay: the
-   deepest layers materialise first so the scene builds back-to-front */
+   deepest layers materialise first so the scene builds back-to-front.
+   Opacity and filter only — transform belongs to the springs. */
 .holopanel.is-in {
   animation: holopanel-in 720ms var(--ease) both;
   animation-delay: var(--boot-delay, 0ms);
 }
 @keyframes holopanel-in {
-  0%   { opacity: 0;
-         transform: translate(-50%, -50%) translateZ(var(--zpx, 0px))
-                    translateY(10px) scale(.97);
-         filter: blur(10px) brightness(2.5); }
-  60%  { opacity: 1; transform: translate(-50%, -50%) translateZ(var(--zpx, 0px));
-         filter: blur(0) brightness(1.15); }
-  100% { opacity: var(--dof-dim, 1);
-         transform: translate(-50%, -50%) translateZ(var(--zpx, 0px));
-         filter: blur(var(--dof-blur, 0px)); }
+  0%   { opacity: 0; filter: blur(10px) brightness(2.5); }
+  60%  { opacity: 1; filter: blur(0) brightness(1.15); }
+  100% { opacity: var(--dof-dim, 1); filter: blur(var(--dof-blur, 0px)); }
 }
+
+.is-focused.holopanel { border-color: rgb(var(--glow) / .65); }
 
 /* ---- panel anatomy ------------------------------------------------------ */
 .panel-head {
@@ -137,15 +181,15 @@ body {
 }
 .panel-body { padding: 12px 14px 14px; }
 
-/* every layer wears its own coordinate, so the mapping is legible */
+/* every unit wears its coordinate and its live share of the screen */
 .ztag {
   margin-left: auto; font: 500 9px/1 ui-monospace, Menlo, Consolas, monospace;
   font-style: normal; letter-spacing: .2em; font-variant-numeric: tabular-nums;
   color: rgb(var(--beam) / .55); white-space: nowrap;
 }
+.ztag b { font-weight: 500; color: var(--faint); }
 .is-focused .ztag { color: rgb(var(--beam) / 1); text-shadow: 0 0 8px rgb(var(--beam) / .8); }
-
-.is-focused.holopanel { border-color: rgb(var(--glow) / .65); }
+.spec-ztag { position: absolute; top: 11px; right: 14px; }
 
 /* ---- readout rows ------------------------------------------------------- */
 .readout { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; }
@@ -188,19 +232,32 @@ body {
 }
 
 .fjump { display: flex; gap: 6px; margin-top: 11px; }
-.fjump button {
+.fjump button, .unitbar button {
   appearance: none; background: transparent; color: var(--dim);
   border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px;
   font: 500 10px/1 ui-monospace, Menlo, Consolas, monospace;
   letter-spacing: .14em; cursor: pointer;
   transition: color .15s, border-color .15s, box-shadow .15s;
 }
-.fjump button:hover, .fjump button:focus-visible {
+.fjump button:hover, .fjump button:focus-visible,
+.unitbar button:hover, .unitbar button:focus-visible {
   color: rgb(var(--ink) / .95); border-color: rgb(var(--glow) / .5);
 }
-.fjump button[aria-pressed="true"] {
+.fjump button[aria-pressed="true"], .unitbar button[aria-pressed="true"] {
   color: rgb(var(--beam)); border-color: rgb(var(--glow) / .7);
   box-shadow: 0 0 10px rgb(var(--glow) / .25), inset 0 0 8px rgb(var(--glow) / .12);
+}
+
+/* ---- unit roster on the glass ------------------------------------------- */
+.unitbar {
+  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  z-index: 6; display: flex; align-items: center; gap: 6px;
+  flex-wrap: wrap; justify-content: center; max-width: 94vw;
+}
+.unitbar .cap {
+  font: 500 8px/1 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .28em; text-indent: .28em; text-transform: uppercase;
+  color: var(--faint); margin-right: 4px;
 }
 
 /* ---- signal walks list -------------------------------------------------- */
@@ -227,11 +284,7 @@ body {
   color: var(--faint); font-variant-numeric: tabular-nums;
 }
 
-/* ---- the depth rail: the z map ------------------------------------------
-   A vertical minimap of the depth axis itself. Every registered layer gets
-   a tick at its depth; the glowing marker is the focal plane. It sits on
-   the glass (outside the rig) because a map of the space should not live
-   inside the space it maps. */
+/* ---- the depth rail: the z map ------------------------------------------ */
 .zrail {
   position: fixed; left: clamp(10px, 2.4vw, 30px); top: 50%;
   transform: translateY(-50%); height: min(52vh, 420px); width: 40px;
@@ -280,6 +333,11 @@ body {
   background: rgb(var(--beam));
 }
 
+/* ---- territory particles ------------------------------------------------ */
+.particles {
+  position: fixed; inset: 0; z-index: 7; pointer-events: none;
+}
+
 /* ---- boot chip (per the somatotopy stage) ------------------------------- */
 .bootload {
   position: fixed; top: 46%; left: 50%; transform: translate(-50%, -50%);
@@ -304,13 +362,11 @@ body:not(.booting) .bootload { opacity: 0; visibility: hidden; }
 }
 @keyframes bl-scan { from { left: -26px; } to { left: 74px; } }
 @keyframes bl-pulse { 0%, 100% { opacity: .55; } 50% { opacity: 1; } }
-body.booting .zui-rig, body.booting .zrail { opacity: 0; }
-.zui-rig, .zrail { transition: opacity .55s ease; }
+body.booting .zui-rig, body.booting .zrail, body.booting .unitbar { opacity: 0; }
+.zui-rig, .zrail, .unitbar { transition: opacity .55s ease; }
 
 /* ---- fixed chrome ------------------------------------------------------- */
-.mast {
-  padding: 13px 16px 0 0; text-align: left;
-}
+.mast { padding: 4px 8px 0 0; }
 .mast h1 {
   margin: 0; font: 500 13px/1.3 ui-monospace, Menlo, Consolas, monospace;
   letter-spacing: .34em; text-transform: uppercase; color: rgb(var(--ink) / .9);
@@ -318,19 +374,20 @@ body.booting .zui-rig, body.booting .zrail { opacity: 0; }
 }
 .mast p {
   margin: 6px 0 0; font-size: 11.5px; letter-spacing: .04em; color: var(--dim);
-  max-width: 44ch;
+  max-width: 52ch;
 }
 .mast p b { color: rgb(var(--beam) / .9); font-weight: 500; }
 
 .statusline {
   font: 500 9px/1 ui-monospace, Menlo, Consolas, monospace;
   letter-spacing: .22em; text-transform: uppercase; color: var(--faint);
-  display: flex; gap: 22px; padding: 9px 14px; white-space: nowrap;
+  display: flex; gap: 22px; padding: 10px 16px; white-space: nowrap;
+  flex-wrap: wrap; justify-content: center;
 }
 .statusline b { color: rgb(var(--beam) / .75); font-weight: 500; }
 
-/* specimen canvas fills its layer */
-.specimen { border-radius: 12px; overflow: hidden; }
+/* specimen canvas fills its unit */
+.specimen { overflow: hidden; }
 .specimen canvas { display: block; width: 100%; height: 100%; }
 .specimen .cap {
   position: absolute; left: 14px; bottom: 11px;
@@ -340,29 +397,21 @@ body.booting .zui-rig, body.booting .zrail { opacity: 0; }
 }
 .specimen .cap b { color: rgb(var(--beam) / .8); font-weight: 500; }
 
-/* ---- placement ----------------------------------------------------------
-   left/top address each layer's centre. Depth comes only from data-z; these
-   two numbers are pure composition. */
-.lay-mast     { left: 25%;   top: 13%;   width: min(360px, 40vw); }
-.lay-specimen { left: 43%;   top: 53%;   width: min(620px, 47vw);
-                height: min(500px, 58vh); }
-.lay-readout  { left: 79%;   top: 21%;   width: min(252px, 24vw); }
-.lay-fplane   { left: 80%;   top: 45%;   width: min(280px, 25vw); }
-.lay-walks    { left: 77%;   top: 71%;   width: min(276px, 25vw); }
-.lay-archive  { left: 12.5%; top: 63%;   width: min(220px, 19vw); }
-.lay-status   { left: 43%;   top: 91%; }
-
 @media (max-width: 880px) {
-  .lay-mast     { left: 50%; top: 10%; width: min(360px, 88vw); }
-  .lay-specimen { left: 50%; top: 36%; width: 92vw; height: 30vh; }
-  .lay-readout  { left: 28%; top: 63%; width: 46vw; }
-  .lay-fplane   { left: 75%; top: 63%; width: 42vw; }
-  .lay-walks    { left: 50%; top: 89%; width: 88vw; }
-  .lay-archive, .lay-status { display: none; }
+  /* the rig grows with its content and the stage scrolls it; a fixed-height
+     flex column would let shrunk rows pile onto each other instead */
+  .zui-stage { overflow-y: auto; overflow-x: clip; }
+  .zui-rig { padding: 132px 12px 12px; gap: 12px; }
+  .dock { gap: 12px; }
+  .dock-main { flex-direction: column; }
+  .dock-side { flex-direction: row; width: auto; flex-wrap: wrap; }
+  .dock-side > * { flex: 1 1 220px; }
+  .unit-specimen { min-height: 200px; }
+  .unit-readout, .unit-fplane { flex: 1 1 240px; }
   .zrail { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .holopanel.is-in, .bootload, .bootload i::after { animation: none; }
-  .zui-layer { transition: none; }
+  .zui-unit { transition: none; }
 }
