@@ -68,7 +68,10 @@ body {
   pointer-events: none;
   /* the dock system */
   display: flex; flex-direction: column; gap: 16px;
-  padding: 58px 22px 16px clamp(74px, 6vw, 104px);
+  /* --chrome-top is measured from the unit roster by the engine, so a
+     roster that wraps to more rows pushes the docks down instead of
+     being overlapped by them */
+  padding: var(--chrome-top, 58px) 22px 16px clamp(74px, 6vw, 104px);
 }
 
 /* ---- docks --------------------------------------------------------------
@@ -169,6 +172,10 @@ body {
 
 .is-focused.holopanel { border-color: rgb(var(--glow) / .65); }
 
+/* the subject holds focus: the depth axis exists to fit chrome around it */
+.zui-unit[data-subject] { filter: none; opacity: 1; }
+.zui-unit[data-subject] .ztag b { color: rgb(var(--beam) / .8); }
+
 /* ---- panel anatomy ------------------------------------------------------ */
 .panel-head {
   display: flex; align-items: baseline; gap: 10px;
@@ -250,9 +257,18 @@ body {
 
 /* ---- unit roster on the glass ------------------------------------------- */
 .unitbar {
-  position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+  position: fixed; top: 0; left: 0; right: 0;
   z-index: 6; display: flex; align-items: center; gap: 6px;
-  flex-wrap: wrap; justify-content: center; max-width: 94vw;
+  flex-wrap: wrap; justify-content: center;
+  padding: 14px clamp(10px, 3vw, 22px);
+  /* The roster is pinned to the glass while the stage scrolls beneath it on
+     narrow screens, so it needs its own ground: without one, panels slide
+     under the chips and the two tangle into an unreadable overlap. The
+     engine also measures this box to set the docks' top clearance. */
+  background: linear-gradient(180deg,
+    rgb(7 8 11 / .97) 0%, rgb(7 8 11 / .92) 62%, rgb(7 8 11 / 0) 100%);
+  backdrop-filter: blur(7px);
+  -webkit-backdrop-filter: blur(7px);
 }
 .unitbar .cap {
   font: 500 8px/1 ui-monospace, Menlo, Consolas, monospace;
@@ -386,9 +402,15 @@ body.booting .zui-rig, body.booting .zrail, body.booting .unitbar { opacity: 0; 
 }
 .statusline b { color: rgb(var(--beam) / .75); font-weight: 500; }
 
-/* specimen canvas fills its unit */
+/* the specimen unit is the subject's frame: it owns the territory and wears
+   the label, while the canvas itself is tracked over it from outside the rig */
 .specimen { overflow: hidden; }
-.specimen canvas { display: block; width: 100%; height: 100%; }
+.specimen-canvas {
+  position: fixed; z-index: 4; pointer-events: none;
+  border-radius: 12px; display: block;
+}
+body.booting .specimen-canvas { opacity: 0; }
+.specimen-canvas { transition: opacity .55s ease; }
 .specimen .cap {
   position: absolute; left: 14px; bottom: 11px;
   font: 500 9px/1.7 ui-monospace, Menlo, Consolas, monospace;
@@ -401,13 +423,21 @@ body.booting .zui-rig, body.booting .zrail, body.booting .unitbar { opacity: 0; 
   /* the rig grows with its content and the stage scrolls it; a fixed-height
      flex column would let shrunk rows pile onto each other instead */
   .zui-stage { overflow-y: auto; overflow-x: clip; }
-  .zui-rig { padding: 132px 12px 12px; gap: 12px; }
+  .zui-rig { padding: var(--chrome-top, 132px) 12px 12px; gap: 12px; }
+  /* On the scrolling layout nothing may shrink below its content. A flex
+     child squeezed past its content reports the short height it was given
+     while the content spills out of it — an overlap the flow cannot see and
+     the ledger cannot measure. Everything sizes to content; the page grows. */
+  .dock, .dock > *, .dock-side > * { flex: 0 0 auto; min-height: auto; }
   .dock { gap: 12px; }
-  .dock-main { flex-direction: column; }
-  .dock-side { flex-direction: row; width: auto; flex-wrap: wrap; }
-  .dock-side > * { flex: 1 1 220px; }
-  .unit-specimen { min-height: 200px; }
-  .unit-readout, .unit-fplane { flex: 1 1 240px; }
+  .dock-top, .dock-main, .dock-side { flex-direction: column; }
+  .dock-side { width: auto; }
+  .mast, .unit-readout, .unit-fplane { width: 100%; }
+  .unit-specimen { width: 100%; height: 46vh; min-height: 220px; }
+  /* the status line is nowrap segments: without a ceiling it sizes to
+     max-content and hangs off both edges of a narrow viewport */
+  .dock-bot, .statusline { width: 100%; max-width: 100%; }
+  .statusline { gap: 8px 16px; }
   .zrail { display: none; }
 }
 
