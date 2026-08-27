@@ -11,6 +11,14 @@
 
 <div class="bootload" aria-hidden="true">Mapping depth field<i></i></div>
 
+<!-- The subject renders on its own plane, outside the perspective rig.
+     Inside it, every repaint of this canvas forces the whole preserve-3d
+     subtree — blurred panels and backdrop included — to re-render, which
+     costs about two thirds of the frame rate. Out here it is independent,
+     and it loses nothing: the rig tilt already feeds its own projection.
+     It sits above the panels because the subject is the nearest plane. -->
+<canvas id="specimen-canvas" class="specimen-canvas" aria-hidden="true"></canvas>
+
 <!-- territory particles live on the glass, in screen space -->
 <canvas id="particles" class="particles" aria-hidden="true"></canvas>
 
@@ -62,7 +70,7 @@
           <span class="k">Coverage</span>    <span class="v" id="ro-cover">—</span>
           <span class="k">Last Δ area</span> <span class="v" id="ro-delta">—</span>
           <span class="k">Point field</span> <span class="v" id="ro-points">—</span>
-          <span class="k">Signals</span>     <span class="v" id="ro-signals">—</span>
+          <span class="k">Bundles</span>     <span class="v" id="ro-signals">—</span>
         </div>
       </section>
 
@@ -90,10 +98,9 @@
 
     <div class="dock dock-main">
       <section class="zui-layer zui-unit holopanel unit-specimen specimen" data-z="1.4"
-               data-unit="specimen" data-name="specimen" data-focusable>
-        <canvas id="specimen-canvas"></canvas>
-        <div class="cap"><b>Specimen</b> · HCP S1200 surface · M1 · S1</div>
-        <i class="ztag spec-ztag">Z +1.4 · <b data-share>—</b></i>
+               data-unit="specimen" data-name="specimen" data-focusable data-subject>
+        <div class="cap"><b>Subject</b> · HCP S1200 surface · HCP1065 tracts · M1 · S1</div>
+        <i class="ztag spec-ztag">Z +1.4 · in focus · <b data-share>—</b></i>
       </section>
 
       <div class="dock dock-side">
@@ -103,13 +110,7 @@
             <span class="panel-title">Signal walks</span>
             <i class="ztag">Z −0.6 · <b data-share>—</b></i>
           </div>
-          <div class="panel-body walks">
-            <button type="button"><i></i>Arcuate relay <span class="wz">R-01</span></button>
-            <button type="button"><i></i>Callosal crossing <span class="wz">R-02</span></button>
-            <button type="button"><i></i>Cingulum walk <span class="wz">R-03</span></button>
-            <button type="button"><i></i>Uncinate hook <span class="wz">R-04</span></button>
-            <button type="button"><i></i>Fronto-occipital run <span class="wz">R-05</span></button>
-          </div>
+          <div class="panel-body walks"></div>
         </section>
 
         <section class="zui-layer zui-unit holopanel" data-z="-2.8"
@@ -134,7 +135,7 @@
         <span>Axis <b>1du = 60px</b></span>
         <span>Camera <b>1100px persp</b></span>
         <span>Springs <b>ω = 14 rad/s</b></span>
-        <span>Ledger <b>live</b></span>
+        <span>Subject <b>held in focus</b></span>
       </footer>
     </div>
 
@@ -143,6 +144,7 @@
 
 <script src="js/zui.js"></script>
 <script src="js/brainpoints.js"></script>
+<script src="js/tracts.js"></script>
 <script src="js/specimen.js"></script>
 </body>
 </html>

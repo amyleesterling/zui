@@ -2,10 +2,16 @@
    group-average midthickness mesh (Van Essen et al., NeuroImage 80:62, 2013;
    MSMAll registered, 32k fs_LR per hemisphere) as published on
    amyleesterling.github.io/human-brain (meshes/cortex/[LR].glb, Draco), every
-   24th vertex, centred and scaled to +/-500 int units. Axes are already
+   24th vertex. HCP Open Access Data Use Terms.
+
+   Coordinates are MNI millimetres recentred on the cortex centroid, divided
+   by its half-extent (87.9mm) and quantised to +/-500. Axes are
    HUD model axes: x = left-right, y = up (=-MNI z), z = front-back (=MNI y).
+   js/tracts.js carries the identical transform, which is what lands the
+   measured fibre bundles inside this surface.
+
    roi marks Glasser HCP-MMP1 regions: 1 = area 4 (M1), 2 = 3a/3b/1/2 (S1),
-   0 = everything else. HCP Open Access Data Use Terms. */
+   0 = everything else. */
 window.BRAINPOINTS = {
   n: 2708,
   q: 500,

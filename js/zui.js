@@ -32,7 +32,13 @@
 
   /* ---- depth registry ---------------------------------------------------- */
   const layers = [...document.querySelectorAll(".zui-layer[data-z]")]
-    .map(el => ({ el, z: parseFloat(el.dataset.z) * UNIT, blur: -1, dim: -1 }));
+    .map(el => ({
+      el, z: parseFloat(el.dataset.z) * UNIT, blur: -1, dim: -1,
+      // the subject is what the HUD is built around: the depth axis exists to
+      // fit chrome around it, so it never blurs or dims with the focal plane
+      subject: el.hasAttribute("data-subject"),
+      backdrop: el.classList.contains("zui-backwall"),
+    }));
   for (const l of layers) {
     l.el.style.setProperty("--zpx", l.z + "px");
     if (l.el.classList.contains("zui-unit"))
@@ -248,7 +254,35 @@
     });
   }
 
-  addEventListener("resize", () => { compensate(); updateLedger(); });
+  /* ---- chrome clearance --------------------------------------------------
+     The unit roster is fixed to the glass and wraps to as many rows as the
+     viewport forces, so no constant can clear it. Measure it and let the
+     docks start below whatever it actually occupies — otherwise a narrow
+     screen wraps it down over the top row of panels. */
+  const unitbar = document.querySelector(".unitbar");
+  function clearance() {
+    if (!unitbar) return;
+    const h = unitbar.getBoundingClientRect().height;
+    document.documentElement.style.setProperty(
+      "--chrome-top", Math.ceil(h + 24) + "px");
+  }
+  if (unitbar && "ResizeObserver" in window)
+    new ResizeObserver(() => { clearance(); compensate(); updateLedger(); })
+      .observe(unitbar);
+  clearance();
+
+  addEventListener("resize", () => { clearance(); compensate(); updateLedger(); });
+
+  /* The compensation is measured against the perspective origin, which is
+     fixed to the viewport — so scrolling the stage moves every unit relative
+     to it and invalidates the correction. Recompute as the scroll settles,
+     or deep units drift off their flow boxes and back into each other. */
+  let scrollPending = 0;
+  stage.addEventListener("scroll", () => {
+    if (scrollPending) return;
+    scrollPending = requestAnimationFrame(() => { scrollPending = 0; compensate(); });
+  }, { passive: true });
+
   compensate();
 
   /* ---- pointer -> rig tilt ---------------------------------------------- */
@@ -285,14 +319,22 @@
       b.setAttribute("aria-pressed", String(Math.abs(+b.dataset.f * UNIT - state.focusTarget) < 1));
   }
 
-  stage.addEventListener("click", e => {
-    // a click on a control inside a panel is that control's, not the panel's
-    if (e.target.closest("button, input, a")) return;
-    const el = e.target.closest(".zui-unit[data-focusable]");
+  /* Operating a panel brings it into focus. Reaching a control you cannot
+     read is the failure this whole depth axis invites: the chrome recedes to
+     make room, and then you go to use some of it. So any interaction inside
+     a unit — a click anywhere in it, or a control taking keyboard focus —
+     racks the plane to that unit, and it is sharp by the time you act on it.
+     The control still does its own job; this only says where to look. */
+  function focusUnitOf(node) {
+    const el = node && node.closest && node.closest(".zui-unit[data-focusable]");
     if (!el) return;
     const layer = layers.find(l => l.el === el);
-    if (layer) setFocus(layer.z, layer);
-  });
+    // the subject is always sharp, so aiming the plane at it would only pull
+    // every panel out of focus for no gain
+    if (layer && !layer.subject) setFocus(layer.z, layer);
+  }
+  stage.addEventListener("pointerdown", e => focusUnitOf(e.target));
+  stage.addEventListener("focusin", e => focusUnitOf(e.target));
 
   addEventListener("keydown", e => {
     if (e.key === "[") setFocus(state.focusTarget - UNIT / 2);
@@ -345,19 +387,37 @@
   const kTilt = reduced ? 1 : 0.07;
   const kFocus = reduced ? 1 : 0.085;
   let roClock = 0;
+  let lastRigT = "";
   let last = performance.now();
+  const subject = units.find(u => u.el.hasAttribute("data-subject"));
+  let subjectRect = null;
 
   function frame(now) {
     const dtMs = Math.min(50, now - last); last = now;
     const dt = dtMs / 1000;
     state.t += dt;
+
+    // Read the subject's projected box before this frame writes any styles,
+    // so the one forced layout per frame flushes the previous frame's work
+    // rather than our own. The canvas that tracks it lives outside the rig.
+    if (subject) {
+      subjectRect = visible(subject) ? subject.el.getBoundingClientRect() : null;
+    }
     const g = dtMs / 16.7;
     state.tilt.x += (state.tiltTarget.x - state.tilt.x) * kTilt * g;
     state.tilt.y += (state.tiltTarget.y - state.tilt.y) * kTilt * g;
     state.focus += (state.focusTarget - state.focus) * kFocus * g;
+    // These springs approach their target asymptotically, so without a snap
+    // they never stop producing new values — and every new value rewrites the
+    // rig transform, which re-renders every blurred layer under it. Landing
+    // them is what lets the scene go genuinely idle.
+    if (Math.abs(state.tiltTarget.x - state.tilt.x) < 0.002) state.tilt.x = state.tiltTarget.x;
+    if (Math.abs(state.tiltTarget.y - state.tilt.y) < 0.002) state.tilt.y = state.tiltTarget.y;
+    if (Math.abs(state.focusTarget - state.focus) < 0.05) state.focus = state.focusTarget;
 
-    rig.style.transform =
+    const rigT =
       `rotateX(${(-state.tilt.y).toFixed(3)}deg) rotateY(${state.tilt.x.toFixed(3)}deg)`;
+    if (rigT !== lastRigT) { rig.style.transform = rigT; lastRigT = rigT; }
 
     for (const l of layers) {
       // asymmetric depth of field, like eyes focused near: distance BEHIND
@@ -365,8 +425,12 @@
       // of it only gently — the deepest layers are always the blurriest
       const d = (state.focus - l.z) / UNIT;   // positive = behind the plane
       const db = Math.max(0, d), df = Math.max(0, -d);
-      const blur = Math.min(8, Math.max(0, db - 0.55) * 1.9 + Math.max(0, df - 0.55) * 0.8);
-      const dim = Math.max(0.5,
+      // The backdrop is a full-viewport element, and blurring one that large
+      // every frame costs more than the depth cue is worth — it recedes by
+      // dimming alone, which on a faint grid reads the same.
+      const blur = (l.subject || l.backdrop) ? 0
+        : Math.min(5, Math.max(0, db - 0.55) * 1.6 + Math.max(0, df - 0.55) * 0.7);
+      const dim = l.subject ? 1 : Math.max(0.5,
         1 - Math.max(0, db - 0.35) * 0.11 - Math.max(0, df - 0.35) * 0.05);
       if (Math.abs(blur - l.blur) > 0.05) {
         l.el.style.setProperty("--dof-blur", blur.toFixed(2) + "px"); l.blur = blur;
@@ -429,6 +493,7 @@
     get tilt() { return state.tilt; },
     get time() { return state.t; },
     setFocus, relayout,
+    get subjectRect() { return subjectRect; },
     onFrame(fn) { frameHooks.push(fn); },
   };
 })();
